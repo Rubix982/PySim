@@ -96,6 +96,8 @@ class Message:
             hostname = self.request.get('value')['hostname']
             addr = self.request.get('value')['addr']
             port = self.addr[1]
+            addr_mac = self.request.get('value')['addr_mac']
+            peer_mac = self.request.get('value')['peer_mac']
 
             content = {}
 
