@@ -8,6 +8,8 @@ crypto = "*"
 pyopenssl = "*"
 black = "*"
 netifaces = "*"
+cryptography = "==2.5"
+flake8 = "*"
 
 [dev-packages]
 

@@ -1,6 +1,9 @@
 # This code is used to create Self Signed Certificate
 from OpenSSL import crypto
+from cryptography.fernet import Fernet
 import hashlib
+import random
+import string
 
 
 class CertificateAux:
@@ -20,7 +23,7 @@ class CertificateAux:
         CERT_FILE="selfsigned.crt",
     ):
 
-        # Can look at generated file using openssl:
+        # Can look at generated file using OpenSSL
         # Openssl x509 -inform pem -in selfsigned.crt -noout -text
         # Create a key pair
         k = crypto.PKey()
@@ -31,11 +34,11 @@ class CertificateAux:
         cert.get_subject().C = countryName
         cert.get_subject().ST = stateOrProvinceName
         cert.get_subject().L = localityName
-        cert.get_subject().O = organizationName
+        cert.get_subject().O = organizationName  # noqa: E741
         cert.get_subject().OU = organizationUnitName
         cert.get_subject().CN = commonName
         cert.get_subject().emailAddress = emailAddress
-        cert.set_serial_number(serialNumber)
+        cert.set_serial_number(CertificateAux().serial_id_generator())
         cert.gmtime_adj_notBefore(0)
         cert.gmtime_adj_notAfter(validityEndInSeconds)
         cert.set_issuer(cert.get_subject())
@@ -60,18 +63,42 @@ class CertificateAux:
             - Returns the SHA-1 hash of the file passed into it
         """
 
-        # make a hash object
+        # Make a hash object
         h = hashlib.sha1()
 
-        # open file for reading in binary mode
+        # Open file for reading in binary mode
         with open(filename, "rb") as file:
-            # loop till the end of the file
+
+            # Loop till the end of the file
             chunk = 0
 
             while chunk != b"":
-                # read only 1024 bytes at a time
+
+                # Read only 1024 bytes at a time
                 chunk = file.read(1024)
                 h.update(chunk)
 
-        # return the hex representation of digest
+        # Return the hex representation of digest
         return h.hexdigest()
+
+    @staticmethod
+    def encrypt_with_fernet(message: str) -> str:
+        '''
+        Use to encrypt session key
+        '''
+
+        fernet = Fernet(Fernet.generate_key())
+        return fernet.encrypt(message.encode())
+
+    @staticmethod
+    def decrypt_with_fernet(enc_message: str) -> str:
+        '''
+        Used to decrypt session key
+        '''
+
+        fernet = Fernet(Fernet.generate_key())
+        return fernet.decrypt(enc_message).decode()
+
+    @staticmethod
+    def serial_id_generator(size: int = 10, chars: str = string.digits) -> str:
+        return int(''.join(random.choice(chars) for _ in range(size)))

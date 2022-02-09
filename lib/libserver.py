@@ -1,9 +1,15 @@
-import enum
+#!/usr/bin/env python3
+
 import sys
 import selectors
 import json
 import io
+import os
 import struct
+import csv
+import secrets
+
+from lib.CertificateAuxClass import CertificateAux
 
 request_search = {
     "morpheus": "Follow the white rabbit. \U0001f430",
@@ -24,6 +30,31 @@ class Message:
         self.request = None
         self.response_created = False
         self._registered_addresses = []
+        self._cert_gen_random_data = self._get_cert_gen_csv_data()
+
+    def _get_cert_gen_csv_data(self):
+
+        csv_data = dict(email_address=[], common_name=[], country_name=[])
+
+        with open('./data/cert_gen_data.csv') as csv_file:
+
+            csv_reader = csv.reader(csv_file, delimiter=',')
+            line_count = 0
+
+            for row in csv_reader:
+
+                if line_count == 0:
+                    print(f'Column names are {", ".join(row)}')
+                else:
+                    csv_data['email_address'].append(row[0])
+                    csv_data['common_name'].append(row[1])
+                    csv_data['country_name'].append(row[2])
+
+                line_count += 1
+
+            print(f'Processed {line_count} lines.')
+
+        return csv_data
 
     def _set_selector_events_mask(self, mode):
         """Set selector to listen for events: mode is 'r', 'w', or 'rw'."""
@@ -93,6 +124,10 @@ class Message:
             answer = request_search.get(query) or f'No match for "{query}".'
             content = {"result": answer}
         elif action == 'add':
+
+            if not os.path.exists('certs'):
+                os.makedirs('certs')
+
             hostname = self.request.get('value')['hostname']
             addr = self.request.get('value')['addr']
             port = self.addr[1]
@@ -104,10 +139,26 @@ class Message:
             if addr != '127.0.0.1':
                 content = {"result": "invalid IP"}
             else:
+                os.makedirs(f'certs/{addr_mac}-{addr}-{port}')
+
+                CertificateAux().cert_gen(
+                    emailAddress=secrets.choice(self._cert_gen_random_data['email_address']),
+                    commonName=secrets.choice(self._cert_gen_random_data['common_name']),
+                    countryName=secrets.choice(self._cert_gen_random_data['country_name']),
+                    localityName=secrets.token_urlsafe(nbytes=10),
+                    stateOrProvinceName=secrets.token_urlsafe(nbytes=10),
+                    organizationName=secrets.token_urlsafe(nbytes=10),
+                    organizationUnitName=secrets.token_urlsafe(nbytes=10),
+                    KEY_FILE=f'certs/{addr_mac}-{addr}-{port}/private.key',
+                    CERT_FILE=f'certs/{addr_mac}-{addr}-{port}/selfsigned.crt'
+                )
+
                 self._registered_addresses.append(dict(
                     hostname=hostname,
                     addr_ip=addr,
                     port=port,
+                    addr_mac=addr_mac,
+                    peer_mac=peer_mac,
                 ))
                 content = {"result": f"successfully added client {addr, port} "}
         else:

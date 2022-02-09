@@ -1,6 +1,6 @@
-from ipaddress import ip_address
 import socket
 import netifaces
+
 
 class MacAux:
     @staticmethod
