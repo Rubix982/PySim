@@ -1,8 +1,11 @@
+import socket
 import sys
 import selectors
 import json
 import io
 import struct
+
+from lib.Certificate import Certificate
 
 
 class Message:
@@ -17,6 +20,23 @@ class Message:
         self._jsonheader_len = None
         self.jsonheader = None
         self.response = None
+        self._certificate = Certificate(self._get_key_response_from_ckms())
+
+    def _get_key_response_from_ckms(self) -> dict:
+
+        HOST = "127.0.0.1"  # The server's hostname or IP address
+        PORT = 40008  # The port used by the CKMS
+
+        keys = {}
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ckms_socket:
+            ckms_socket.connect((HOST, PORT))
+            ckms_socket.sendall(
+                f"Connection from {self.addr}:{self.sock}".encode("utf-8")
+            )
+            keys = ckms_socket.recv(1024)
+
+        return dict(_signing_key=keys[:16], _encryption_key=keys[17:])
 
     def _set_selector_events_mask(self, mode):
         """Set selector to listen for events: mode is 'r', 'w', or 'rw'."""
@@ -185,7 +205,9 @@ class Message:
         self._recv_buffer = self._recv_buffer[content_len:]
         if self.jsonheader["content-type"] == "text/json":
             encoding = self.jsonheader["content-encoding"]
-            self.response = self._json_decode(data, encoding)
+            self.response = self._json_decode(
+                self._certificate.decrypt_with_fernet(data), encoding
+            )
             print("received response", repr(self.response), "from", self.addr)
             self._process_response_json_content()
         else:

@@ -4,11 +4,57 @@ from cryptography.fernet import Fernet
 import hashlib
 import random
 import string
+from threading import Lock
 
 
-class CertificateAux:
-    @staticmethod
+class SingletonMeta(type):
+    """
+    This is a thread-safe implementation of Singleton.
+    """
+
+    _instances = {}
+
+    _lock: Lock = Lock()
+    """
+    We now have a lock object that will be used to synchronize threads during
+    first access to the Singleton.
+    """
+
+    def __call__(cls, *args, **kwargs):
+
+        """
+        Possible changes to the value of the `__init__` argument do not affect
+        the returned instance.
+        """
+        # Now, imagine that the program has just been launched. Since there's no
+        # Singleton instance yet, multiple threads can simultaneously pass the
+        # previous conditional and reach this point almost at the same time. The
+        # first of them will acquire lock and will proceed further, while the
+        # rest will wait here.
+        with cls._lock:
+            # The first thread to acquire the lock, reaches this conditional,
+            # goes inside and creates the Singleton instance. Once it leaves the
+            # lock block, a thread that might have been waiting for the lock
+            # release may then enter this section. But since the Singleton field
+            # is already initialized, the thread won't create a new object.
+            if cls not in cls._instances:
+                instance = super().__call__(*args, **kwargs)
+                cls._instances[cls] = instance
+
+        return cls._instances[cls]
+
+
+class Certificate(metaclass=SingletonMeta):
+
+    fernet: Fernet = None
+
+    def __init__(self, keys: dict) -> None:
+        self.fernet = Fernet(key=Fernet.generate_key())
+        self.fernet._signing_key = keys["_signing_key"]
+        self.fernet._encryption_key = keys["_encryption_key"]
+
     def cert_gen(
+        self,
         emailAddress="emailAddress",
         commonName="commonName",
         countryName="NT",
@@ -38,7 +84,9 @@ class CertificateAux:
         cert.get_subject().OU = organizationUnitName
         cert.get_subject().CN = commonName
         cert.get_subject().emailAddress = emailAddress
-        cert.set_serial_number(CertificateAux().serial_id_generator())
+        cert.set_serial_number(
+            self.serial_id_generator() if serialNumber == 0 else serialNumber
+        )
         cert.gmtime_adj_notBefore(0)
         cert.gmtime_adj_notAfter(validityEndInSeconds)
         cert.set_issuer(cert.get_subject())
@@ -51,8 +99,7 @@ class CertificateAux:
         with open(KEY_FILE, "wt") as f:
             f.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, k).decode("utf-8"))
 
-    @staticmethod
-    def hash_file(filename):
+    def hash_file(self, filename):
         """
         This function is for the hashing concept.
 
@@ -81,24 +128,20 @@ class CertificateAux:
         # Return the hex representation of digest
         return h.hexdigest()
 
-    @staticmethod
-    def encrypt_with_fernet(message: str) -> str:
-        '''
+    def encrypt_with_fernet(self, message: bytes) -> bytes:
+        """
         Use to encrypt session key
-        '''
+        """
+        return self.fernet.encrypt(message)
 
-        fernet = Fernet(Fernet.generate_key())
-        return fernet.encrypt(message.encode())
-
-    @staticmethod
-    def decrypt_with_fernet(enc_message: str) -> str:
-        '''
+    def decrypt_with_fernet(self, enc_message: bytes) -> bytes:
+        """
         Used to decrypt session key
-        '''
+        """
+        return self.fernet.decrypt(enc_message)
 
-        fernet = Fernet(Fernet.generate_key())
-        return fernet.decrypt(enc_message).decode()
-
-    @staticmethod
-    def serial_id_generator(size: int = 10, chars: str = string.digits) -> str:
-        return int(''.join(random.choice(chars) for _ in range(size)))
+    def serial_id_generator(self, size: int = 10, chars: str = string.digits) -> str:
+        """
+        Generate a random string
+        """
+        return int("".join(random.choice(chars) for _ in range(size)))
