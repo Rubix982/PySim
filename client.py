@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import encodings
 import sys
 import socket
 import selectors
@@ -19,11 +18,11 @@ def create_request(action, value):
             encoding="utf-8",
             content=dict(action=action, value=value),
         )
-    elif action == 'add':
+    elif action == "add":
         return dict(
             type="text/json",
             encoding="utf-8",
-            content=dict(action=action, value=MacAux().get_machine_info())
+            content=dict(action=action, value=MacAux().get_machine_info()),
         )
     else:
         return dict(
@@ -45,9 +44,9 @@ def start_connection(host, port, request):
 
 
 if len(sys.argv) == 4:
-    sys.argv.append('')
+    sys.argv.append("")
 elif len(sys.argv) < 4:
-    print(f'usage: {sys.argv[0]} <host> <port> <action> <value>')
+    print(f"usage: {sys.argv[0]} <host> <port> <action> <value>")
     sys.exit(1)
 
 host, port = sys.argv[1], int(sys.argv[2])

@@ -1,9 +1,16 @@
-import enum
+#!/usr/bin/env python3
+
+import socket
 import sys
 import selectors
 import json
 import io
+import os
 import struct
+import csv
+import secrets
+
+from lib.Certificate import Certificate
 
 request_search = {
     "morpheus": "Follow the white rabbit. \U0001f430",
@@ -24,6 +31,48 @@ class Message:
         self.request = None
         self.response_created = False
         self._registered_addresses = []
+        self._cert_gen_random_data = self._get_cert_gen_csv_data()
+        self._certificate_aux = Certificate(self._get_key_response_from_ckms())
+
+    def _get_key_response_from_ckms(self) -> dict:
+
+        HOST = "127.0.0.1"  # The server's hostname or IP address
+        PORT = 40008  # The port used by the CKMS
+
+        keys = {}
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ckms_socket:
+            ckms_socket.connect((HOST, PORT))
+            ckms_socket.sendall(
+                f"Connection from {self.addr}:{self.sock}".encode("utf-8")
+            )
+            keys = ckms_socket.recv(1024)
+
+        return dict(_signing_key=keys[:16], _encryption_key=keys[17:])
+
+    def _get_cert_gen_csv_data(self):
+
+        csv_data = dict(email_address=[], common_name=[], country_name=[])
+
+        with open("./data/cert_gen_data.csv") as csv_file:
+
+            csv_reader = csv.reader(csv_file, delimiter=",")
+            line_count = 0
+
+            for row in csv_reader:
+
+                if line_count == 0:
+                    print(f'Column names are {", ".join(row)}')
+                else:
+                    csv_data["email_address"].append(row[0])
+                    csv_data["common_name"].append(row[1])
+                    csv_data["country_name"].append(row[2])
+
+                line_count += 1
+
+            print(f"Processed {line_count} lines.")
+
+        return csv_data
 
     def _set_selector_events_mask(self, mode):
         """Set selector to listen for events: mode is 'r', 'w', or 'rw'."""
@@ -88,48 +137,85 @@ class Message:
 
     def _create_response_json_content(self):
         action = self.request.get("action")
+        content_encoding = "utf-8"
         if action == "search":
             query = self.request.get("value")
             answer = request_search.get(query) or f'No match for "{query}".'
             content = {"result": answer}
-        elif action == 'add':
-            hostname = self.request.get('value')['hostname']
-            addr = self.request.get('value')['addr']
+        elif action == "add":
+
+            if not os.path.exists("certs"):
+                os.makedirs("certs")
+
+            hostname = self.request.get("value")["hostname"]
+            addr = self.request.get("value")["addr"]
             port = self.addr[1]
-            addr_mac = self.request.get('value')['addr_mac']
-            peer_mac = self.request.get('value')['peer_mac']
+            addr_mac = self.request.get("value")["addr_mac"]
+            peer_mac = self.request.get("value")["peer_mac"]
 
             content = {}
 
-            if addr != '127.0.0.1':
+            if addr != "127.0.0.1":
                 content = {"result": "invalid IP"}
             else:
-                self._registered_addresses.append(dict(
+                os.makedirs(f"certs/{addr_mac}-{addr}-{port}")
+
+                self._certificate_aux.cert_gen(
+                    emailAddress=secrets.choice(
+                        self._cert_gen_random_data["email_address"]
+                    ),
+                    commonName=secrets.choice(
+                        self._cert_gen_random_data["common_name"]
+                    ),
+                    countryName=secrets.choice(
+                        self._cert_gen_random_data["country_name"]
+                    ),
+                    localityName=secrets.token_urlsafe(nbytes=10),
+                    stateOrProvinceName=secrets.token_urlsafe(nbytes=10),
+                    organizationName=secrets.token_urlsafe(nbytes=10),
+                    organizationUnitName=secrets.token_urlsafe(nbytes=10),
+                    KEY_FILE=f"certs/{addr_mac}-{addr}-{port}/private.key",
+                    CERT_FILE=f"certs/{addr_mac}-{addr}-{port}/selfsigned.crt",
+                )
+
+                hash_file_data = self._certificate_aux.hash_file(
+                    f"certs/{addr_mac}-{addr}-{port}/selfsigned.crt"
+                )
+
+                result_data_to_store = dict(
                     hostname=hostname,
                     addr_ip=addr,
                     port=port,
-                ))
-                content = {"result": f"successfully added client {addr, port} "}
+                    addr_mac=addr_mac,
+                    peer_mac=peer_mac,
+                )
+
+                self._registered_addresses.append(
+                    self._certificate_aux.encrypt_with_fernet(
+                        self._json_encode(result_data_to_store, content_encoding)
+                    )
+                )
+                content = {
+                    "result": f"successfully added client {addr, port}",
+                    "hashed_cert": hash_file_data,
+                }
         else:
             content = {"result": f'Error: invalid action "{action}".'}
-        content_encoding = "utf-8"
-        response = {
-            "content_bytes": self._json_encode(content, content_encoding),
+
+        return {
+            "content_bytes": self._certificate_aux.encrypt_with_fernet(
+                self._json_encode(content, content_encoding)
+            ),
             "content_type": "text/json",
             "content_encoding": content_encoding,
         }
 
-        print(response)
-
-        return response
-
     def _create_response_binary_content(self):
-        response = {
+        return {
             "content_bytes": b"First 10 bytes of request: " + self.request[:10],
             "content_type": "binary/custom-server-binary-type",
             "content_encoding": "binary",
         }
-        return response
 
     def process_events(self, mask):
         if mask & selectors.EVENT_READ:
