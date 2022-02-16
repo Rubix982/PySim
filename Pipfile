@@ -10,6 +10,11 @@ black = "*"
 netifaces = "*"
 cryptography = "==2.5"
 flake8 = "*"
+matplotlib = "*"
+xlsxwriter = "*"
+numpy = "*"
+pandas = "*"
+openpyxl = "*"
 
 [dev-packages]
 
