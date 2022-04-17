@@ -32,27 +32,31 @@ def create_request(action, value):
         )
 
 
-def start_connection(host, port, request):
-    addr = (host, port)
-    print(f"starting connection to {addr}")
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.setblocking(False)
-    sock.connect_ex(addr)
-    events = selectors.EVENT_READ | selectors.EVENT_WRITE
-    message = lib.libclient.Message(sel, sock, addr, request)
-    sel.register(sock, events, data=message)
+def start_connection(host, port, request, client):
+    for index in range(0, 10):
+        addr = (host, port)
+        print(f"starting connection to {addr}")
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.bind((client[0], client[1] + index))
+        sock.setblocking(False)
+        sock.connect_ex(addr)
+        events = selectors.EVENT_READ | selectors.EVENT_WRITE
+        message = lib.libclient.Message(sel, sock, addr, request)
+        sel.register(sock, events, data=message)
 
 
-if len(sys.argv) == 4:
+if len(sys.argv) == 6:
     sys.argv.append("")
-elif len(sys.argv) < 4:
-    print(f"usage: {sys.argv[0]} <host> <port> <action> <value>")
+elif len(sys.argv) < 5:
+    print(
+        f"usage: {sys.argv[0]} <server_ip> <server_port> <client_ip> <client_port> <action> <value>"
+    )
     sys.exit(1)
 
 host, port = sys.argv[1], int(sys.argv[2])
-action, value = sys.argv[3], sys.argv[4]
+action, value = sys.argv[5], sys.argv[6]
 request = create_request(action, value)
-start_connection(host, port, request)
+start_connection(host, port, request, (sys.argv[3], int(sys.argv[4])))
 
 try:
     while True:

@@ -24,7 +24,7 @@ class Message:
 
     def _get_key_response_from_ckms(self) -> dict:
 
-        HOST = "127.0.0.1"  # The server's hostname or IP address
+        HOST = ""  # The server's hostname or IP address
         PORT = 40008  # The port used by the CKMS
 
         keys = {}

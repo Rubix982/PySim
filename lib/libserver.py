@@ -12,13 +12,6 @@ import secrets
 
 from lib.Certificate import Certificate
 
-request_search = {
-    "morpheus": "Follow the white rabbit. \U0001f430",
-    "ring": "In the caves beneath the Misty Mountains. \U0001f48d",
-    "\U0001f436": "\U0001f43e Playing ball! \U0001f3d0",
-}
-
-
 class Message:
     def __init__(self, selector, sock, addr):
         self.selector = selector
@@ -158,7 +151,9 @@ class Message:
             if addr != "127.0.0.1":
                 content = {"result": "invalid IP"}
             else:
-                os.makedirs(f"certs/{addr_mac}-{addr}-{port}")
+                PATH = f"certs/{addr_mac}-{self.addr[0]}-{port}"
+
+                os.makedirs(PATH)
 
                 self._certificate_aux.cert_gen(
                     emailAddress=secrets.choice(
@@ -174,12 +169,12 @@ class Message:
                     stateOrProvinceName=secrets.token_urlsafe(nbytes=10),
                     organizationName=secrets.token_urlsafe(nbytes=10),
                     organizationUnitName=secrets.token_urlsafe(nbytes=10),
-                    KEY_FILE=f"certs/{addr_mac}-{addr}-{port}/private.key",
-                    CERT_FILE=f"certs/{addr_mac}-{addr}-{port}/selfsigned.crt",
+                    KEY_FILE=f"{PATH}/private.key",
+                    CERT_FILE=f"{PATH}/selfsigned.crt",
                 )
 
                 hash_file_data = self._certificate_aux.hash_file(
-                    f"certs/{addr_mac}-{addr}-{port}/selfsigned.crt"
+                    f"{PATH}/selfsigned.crt"
                 )
 
                 result_data_to_store = dict(
@@ -195,8 +190,19 @@ class Message:
                         self._json_encode(result_data_to_store, content_encoding)
                     )
                 )
+
+                print("----------------------------")
+                print("----------------------------")
+                print("----------------------------")
+                print("----------------------------")
+                print(self._registered_addresses)
+                print("----------------------------")
+                print("----------------------------")
+                print("----------------------------")
+                print("----------------------------")                
+
                 content = {
-                    "result": f"successfully added client {addr, port}",
+                    "result": f"successfully added client {self.addr, port}",
                     "hashed_cert": hash_file_data,
                 }
         else:
